@@ -33,7 +33,9 @@ app.get(
 );
 
 // LISTENER
-app.listen(3000, () => console.log("Express Server Started"));
+app.listen(process.env.PORT || 3000, () =>
+  console.log("Express Server Started")
+);
 
 // RETROSHEET MIDDLEWARE
 function getPlayerCareerBattingStats(req, res, next) {
