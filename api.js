@@ -1,42 +1,41 @@
 const express = require("express"),
   app = express();
-var bodyParser = require("body-parser");
 
 const rp = require("request-promise");
-const url = "https://www.retrosheet.org/boxesetc/B/Pbettm001.htm";
 const $ = require("cheerio");
 
-function mapBattingStatsToJson(stats) {
-  var startIndex = stats.indexOf("Splits");
-  stats = stats.slice(startIndex + 1, 27);
-  console.log(stats);
-  return {
-    G: stats[0],
-    AB: stats[1],
-    R: stats[2],
-    H: stats[3],
-    "2B": stats[4],
-    "3B": stats[5],
-    HR: stats[6],
-    RBI: stats[7],
-    BB: stats[8],
-    IBB: stats[9],
-    SO: stats[10],
-    HBP: stats[11],
-    SH: stats[12],
-    SF: stats[13],
-    XI: stats[14],
-    ROE: stats[15],
-    GDP: stats[16],
-    SB: stats[17],
-    CS: stats[18],
-    AVG: stats[19],
-    OBP: stats[20],
-    SLG: stats[21],
-    BFW: stats[22]
-  };
-}
+// ROUTES
+app.get("/", (request, response) => {
+  response.send("Hello World");
+});
 
+app.get("/player/search/:searchkey", getPlayerIds, (req, res) => {
+  console.log(req.players);
+  res.json(req.players);
+});
+
+app.get(
+  "/player/career/batting/:playerId",
+  getPlayerCareerBattingStats,
+  (req, res) => {
+    console.log(req.careerStats);
+    res.json(req.careerStats);
+  }
+);
+
+app.get(
+  "/player/:year/batting/:playerId",
+  getPlayerYearlyBattingStats,
+  (req, res) => {
+    console.log(req.yearStats);
+    res.json(req.yearStats);
+  }
+);
+
+// LISTENER
+app.listen(3000, () => console.log("Express Server Started"));
+
+// RETROSHEET MIDDLEWARE
 function getPlayerCareerBattingStats(req, res, next) {
   var playerURL = `https://www.retrosheet.org/boxesetc/${req.params.playerId[0].toUpperCase()}/P${
     req.params.playerId
@@ -110,33 +109,34 @@ function getPlayerIds(req, res, next) {
   });
 }
 
-//getPlayerCareerBattingStats(url);
-
-app.get("/", (request, response) => {
-  response.send("Hello World");
-});
-
-app.get("/player/search/:searchkey", getPlayerIds, (req, res) => {
-  console.log(req.players);
-  res.json(req.players);
-});
-
-app.get(
-  "/player/career/batting/:playerId",
-  getPlayerCareerBattingStats,
-  (req, res) => {
-    console.log(req.careerStats);
-    res.json(req.careerStats);
-  }
-);
-
-app.get(
-  "/player/:year/batting/:playerId",
-  getPlayerYearlyBattingStats,
-  (req, res) => {
-    console.log(req.yearStats);
-    res.json(req.yearStats);
-  }
-);
-
-app.listen(3000, () => console.log("Express Server Started"));
+// RETROSHEET HELPERS
+function mapBattingStatsToJson(stats) {
+  var startIndex = stats.indexOf("Splits");
+  stats = stats.slice(startIndex + 1, 28);
+  console.log(stats);
+  return {
+    G: stats[0],
+    AB: stats[1],
+    R: stats[2],
+    H: stats[3],
+    "2B": stats[4],
+    "3B": stats[5],
+    HR: stats[6],
+    RBI: stats[7],
+    BB: stats[8],
+    IBB: stats[9],
+    SO: stats[10],
+    HBP: stats[11],
+    SH: stats[12],
+    SF: stats[13],
+    XI: stats[14],
+    ROE: stats[15],
+    GDP: stats[16],
+    SB: stats[17],
+    CS: stats[18],
+    AVG: stats[19],
+    OBP: stats[20],
+    SLG: stats[21],
+    BFW: stats[22]
+  };
+}
