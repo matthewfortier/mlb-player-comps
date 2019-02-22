@@ -1,20 +1,21 @@
 const express = require("express"),
   app = express();
+router = express.Router();
 
 const rp = require("request-promise");
 const $ = require("cheerio");
 
 // ROUTES
-app.get("/", (request, response) => {
-  response.send("Hello World");
+router.get("/", (req, res) => {
+  return res.sendFile(__dirname + "/index.html");
 });
 
-app.get("/player/search/:searchkey", getPlayerIds, (req, res) => {
+router.get("/player/search/:searchkey", getPlayerIds, (req, res) => {
   console.log(req.players);
   res.json(req.players);
 });
 
-app.get(
+router.get(
   "/player/career/batting/:playerId",
   getPlayerCareerBattingStats,
   (req, res) => {
@@ -23,7 +24,7 @@ app.get(
   }
 );
 
-app.get(
+router.get(
   "/player/:year/batting/:playerId",
   getPlayerYearlyBattingStats,
   (req, res) => {
@@ -32,7 +33,7 @@ app.get(
   }
 );
 
-app.get(
+router.get(
   "/player/career/fielding/:playerId",
   getPlayerCareerFieldingStats,
   (req, res) => {
@@ -41,7 +42,7 @@ app.get(
   }
 );
 
-app.get(
+router.get(
   "/player/:year/fielding/:playerId",
   getPlayerYearlyFieldingStats,
   (req, res) => {
@@ -49,6 +50,8 @@ app.get(
     res.json(req.yearStats);
   }
 );
+
+app.use("/", router);
 
 // LISTENER
 app.listen(process.env.PORT || 5000, () =>
@@ -73,8 +76,6 @@ function getPlayerCareerFieldingStats(req, res, next) {
   rp(playerURL).then(function(html) {
     // Get the career batting record
     var careerStats = getSectionStatsByContains("Fielding Record", html);
-    //req.careerStats = careerStats.splice(-3, 1)[0];
-
     req.careerStats = {};
     careerStats.forEach((row, index) => {
       if (row[0] == "Total") {
@@ -83,7 +84,7 @@ function getPlayerCareerFieldingStats(req, res, next) {
     });
 
     if (Object.keys(req.careerStats).length > 0) {
-      next();
+      return next();
     }
 
     req.careerStats = "No records for this year";
@@ -105,7 +106,7 @@ function getPlayerYearlyBattingStats(req, res, next) {
     });
 
     if (Object.keys(req.yearStats).length > 0) {
-      next();
+      return next();
     }
 
     req.yearStats = "No records for this year";
@@ -134,7 +135,7 @@ function getPlayerYearlyFieldingStats(req, res, next) {
     });
 
     if (Object.keys(req.yearStats).length > 0) {
-      next();
+      return next();
     }
 
     req.yearStats = "No records for this year";
