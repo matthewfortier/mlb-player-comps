@@ -32,67 +32,110 @@ app.get(
   }
 );
 
+app.get(
+  "/player/career/fielding/:playerId",
+  getPlayerCareerFieldingStats,
+  (req, res) => {
+    console.log(req.careerStats);
+    res.json(req.careerStats);
+  }
+);
+
+app.get(
+  "/player/:year/fielding/:playerId",
+  getPlayerYearlyFieldingStats,
+  (req, res) => {
+    console.log(req.yearStats);
+    res.json(req.yearStats);
+  }
+);
+
 // LISTENER
-app.listen(process.env.PORT || 3000, () =>
+app.listen(process.env.PORT || 5000, () =>
   console.log("Express Server Started")
 );
 
 // RETROSHEET MIDDLEWARE
 function getPlayerCareerBattingStats(req, res, next) {
-  var playerURL = `https://www.retrosheet.org/boxesetc/${req.params.playerId[0].toUpperCase()}/P${
-    req.params.playerId
-  }.htm`;
-
-  console.log(playerURL);
+  var playerURL = getPlayerURL(req.params.playerId);
   // Get HTML from Retrosheet
   rp(playerURL).then(function(html) {
-    console.log($("pre:contains('Batting Record')", html).length);
     // Get the career batting record
-    var element = $("pre:contains('Batting Record')", html)[0];
-    var careerStats = $(element)
-      .text()
-      .split("\n")
-      .map(element =>
-        element
-          .trim()
-          .split(" ")
-          .filter(value => value != "")
-      );
-
+    var careerStats = getSectionStatsByContains("Batting Record", html);
     req.careerStats = mapBattingStatsToJson(careerStats.splice(-3, 1)[0]);
     next();
   });
 }
 
-function getPlayerYearlyBattingStats(req, res, next) {
-  var playerURL = `https://www.retrosheet.org/boxesetc/${req.params.playerId[0].toUpperCase()}/P${
-    req.params.playerId
-  }.htm`;
-
-  console.log(playerURL);
+function getPlayerCareerFieldingStats(req, res, next) {
+  var playerURL = getPlayerURL(req.params.playerId);
   // Get HTML from Retrosheet
   rp(playerURL).then(function(html) {
-    console.log($("pre:contains('Batting Record')", html).length);
     // Get the career batting record
-    var element = $("pre:contains('Batting Record')", html)[0];
-    var careerStats = $(element)
-      .text()
-      .split("\n")
-      .map(element =>
-        element
-          .trim()
-          .split(" ")
-          .filter(value => value != "")
-      );
+    var careerStats = getSectionStatsByContains("Fielding Record", html);
+    //req.careerStats = careerStats.splice(-3, 1)[0];
 
-    //careerStats.splice(0, 2);
-    //careerStats.splice(-3, 3);
+    req.careerStats = {};
     careerStats.forEach((row, index) => {
-      if (row[0] == req.params.year) {
-        req.yearStats = mapBattingStatsToJson(careerStats[index]);
-        next();
+      if (row[0] == "Total") {
+        req.careerStats[row[4]] = mapFieldingStatsToJson(careerStats[index]);
       }
     });
+
+    if (Object.keys(req.careerStats).length > 0) {
+      next();
+    }
+
+    req.careerStats = "No records for this year";
+    next();
+  });
+}
+
+function getPlayerYearlyBattingStats(req, res, next) {
+  var playerURL = getPlayerURL(req.params.playerId);
+  // Get HTML from Retrosheet
+  rp(playerURL).then(function(html) {
+    // Get the career batting record
+    var careerStats = getSectionStatsByContains("Batting Record", html);
+    req.yearStats = {};
+    careerStats.forEach((row, index) => {
+      if (row[0] == req.params.year) {
+        req.yearStats[row[1]] = mapBattingStatsToJson(careerStats[index]);
+      }
+    });
+
+    if (Object.keys(req.yearStats).length > 0) {
+      next();
+    }
+
+    req.yearStats = "No records for this year";
+    next();
+  });
+}
+
+function getPlayerYearlyFieldingStats(req, res, next) {
+  var playerURL = getPlayerURL(req.params.playerId);
+  // Get HTML from Retrosheet
+  rp(playerURL).then(function(html) {
+    // Get the career batting record
+    var careerStats = getSectionStatsByContains("Fielding Record", html);
+
+    req.yearStats = {};
+    careerStats.forEach((row, index) => {
+      if (row[0] == req.params.year) {
+        if (req.yearStats[row[1]]) {
+          req.yearStats[row[1]].push(
+            mapFieldingStatsToJson(careerStats[index])
+          );
+        } else {
+          req.yearStats[row[1]] = [mapFieldingStatsToJson(careerStats[index])];
+        }
+      }
+    });
+
+    if (Object.keys(req.yearStats).length > 0) {
+      next();
+    }
 
     req.yearStats = "No records for this year";
     next();
@@ -112,8 +155,31 @@ function getPlayerIds(req, res, next) {
 }
 
 // RETROSHEET HELPERS
+const positions = [
+  "P",
+  "C",
+  "1B",
+  "2B",
+  "3B",
+  "SS",
+  "LF",
+  "RF",
+  "CF",
+  "OF",
+  "DH"
+];
+
+function getPlayerURL(playerId) {
+  return `https://www.retrosheet.org/boxesetc/${playerId[0].toUpperCase()}/P${playerId}.htm`;
+}
+
 function mapBattingStatsToJson(stats) {
-  var startIndex = stats.indexOf("Splits");
+  var startIndex =
+    stats.indexOf("Splits") == -1
+      ? stats.indexOf("Total")
+      : stats.indexOf("Splits");
+
+  console.log(startIndex);
   stats = stats.slice(startIndex + 1, 28);
   console.log(stats);
   return {
@@ -141,4 +207,45 @@ function mapBattingStatsToJson(stats) {
     SLG: stats[21],
     BFW: stats[22]
   };
+}
+
+function mapFieldingStatsToJson(stats) {
+  var startIndex = -1;
+  for (var i = 0; i < stats.length; i++) {
+    if (positions.includes(stats[i])) {
+      startIndex = i;
+    }
+  }
+
+  var position = stats[startIndex];
+  stats = stats.slice(startIndex + 1, 15);
+
+  var obj = {};
+  obj[position] = {
+    G: stats[0],
+    GS: stats[1],
+    CG: stats[2],
+    INN: stats[3],
+    PO: stats[4],
+    A: stats[5],
+    ERR: stats[6],
+    DP: stats[7],
+    TP: stats[8],
+    AVG: stats[9]
+  };
+
+  return obj;
+}
+
+function getSectionStatsByContains(searchkey, html) {
+  var element = $(`pre:contains('${searchkey}')`, html)[0];
+  return $(element)
+    .text()
+    .split("\n")
+    .map(element =>
+      element
+        .trim()
+        .split(" ")
+        .filter(value => value != "")
+    );
 }
