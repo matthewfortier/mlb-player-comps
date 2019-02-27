@@ -7,7 +7,7 @@ const $ = require("cheerio");
 
 // ROUTES
 router.get("/", (req, res) => {
-  return res.sendFile(__dirname + "/index.html");
+  return res.send("MLB Player Comparisons");
 });
 
 router.get("/player/search/:searchkey", getPlayerIds, (req, res) => {
@@ -58,14 +58,51 @@ app.listen(process.env.PORT || 5000, () =>
   console.log("Express Server Started")
 );
 
-// RETROSHEET MIDDLEWARE
+// Baseball Reference MIDDLEWARE
+
+// Batting Requests
 function getPlayerCareerBattingStats(req, res, next) {
   var playerURL = getPlayerURL(req.params.playerId);
+  console.log(playerURL);
   // Get HTML from Retrosheet
   rp(playerURL).then(function(html) {
     // Get the career batting record
-    var careerStats = getSectionStatsByContains("Batting Record", html);
-    req.careerStats = mapBattingStatsToJson(careerStats.splice(-3, 1)[0]);
+    var careerStats = {};
+    $("#batting_standard tfoot tr:nth-child(1)", html)
+      .children()
+      .each((index, element) => {
+        careerStats[CareerBatting[index]] = $(element).text();
+      });
+
+    req.careerStats = careerStats;
+    next();
+  });
+}
+
+function getPlayerYearlyBattingStats(req, res, next) {
+  var playerURL = getPlayerURL(req.params.playerId);
+  console.log(playerURL);
+  // Get HTML from Retrosheet
+  rp(playerURL).then(function(html) {
+    // Get the career batting record
+    req.yearStats = {};
+    $(
+      `#batting_standard tbody tr th:contains('${req.params.year}')`,
+      html
+    ).each((_, element) => {
+      var tr = $(element).parent();
+
+      console.log($(element).text());
+      req.yearStats[$(tr.children()[2]).text()] = mapStandardBattingStats(
+        tr.children()
+      );
+    });
+
+    if (Object.keys(req.yearStats).length > 0) {
+      return next();
+    }
+
+    req.yearStats = "No records for this year";
     next();
   });
 }
@@ -88,28 +125,6 @@ function getPlayerCareerFieldingStats(req, res, next) {
     }
 
     req.careerStats = "No records for this year";
-    next();
-  });
-}
-
-function getPlayerYearlyBattingStats(req, res, next) {
-  var playerURL = getPlayerURL(req.params.playerId);
-  // Get HTML from Retrosheet
-  rp(playerURL).then(function(html) {
-    // Get the career batting record
-    var careerStats = getSectionStatsByContains("Batting Record", html);
-    req.yearStats = {};
-    careerStats.forEach((row, index) => {
-      if (row[0] == req.params.year) {
-        req.yearStats[row[1]] = mapBattingStatsToJson(careerStats[index]);
-      }
-    });
-
-    if (Object.keys(req.yearStats).length > 0) {
-      return next();
-    }
-
-    req.yearStats = "No records for this year";
     next();
   });
 }
@@ -144,12 +159,31 @@ function getPlayerYearlyFieldingStats(req, res, next) {
 }
 
 function getPlayerIds(req, res, next) {
-  rp(`https://www.retrosheet.org/retroID.htm`).then(function(html) {
-    var players = $($("pre", html)[0])
-      .text()
-      .split("\n")
-      .filter(value => value.includes(req.params.searchkey));
+  rp(
+    `https://www.baseball-reference.com/players/${req.params.searchkey[0].toLowerCase()}/`
+  ).then(function(html) {
+    console.log(html);
 
+    var players = {};
+    $(`#div_players_ a:contains('${req.params.searchkey}')`, html).each(
+      (_, element) => {
+        var id = $(element)
+          .attr("href")
+          .split("/")
+          .pop()
+          .replace(".shtml", "");
+
+        players[id] = {
+          ID: id,
+          Name: $(element).text(),
+          URL: $(element).attr("href"),
+          Current:
+            $(element)
+              .parent()
+              .prop("tagName") == "B"
+        };
+      }
+    );
     req.players = players;
     next();
   });
@@ -170,83 +204,79 @@ const positions = [
   "DH"
 ];
 
+const CareerBatting = [
+  "Yrs",
+  "G",
+  "PA",
+  "AB",
+  "R",
+  "H",
+  "2B",
+  "3B",
+  "HR",
+  "RBI",
+  "SB",
+  "CS",
+  "BB",
+  "SO",
+  "BA",
+  "OBP",
+  "SLG",
+  "OPS",
+  "OPS+",
+  "TB",
+  "GDP",
+  "HBP",
+  "SH",
+  "SF",
+  "IBB",
+  "Pos",
+  "Awards"
+];
+
+const StandardBatting = [
+  "Year",
+  "Age",
+  "Tm",
+  "Lg",
+  "G",
+  "PA",
+  "AB",
+  "R",
+  "H",
+  "2B",
+  "3B",
+  "HR",
+  "RBI",
+  "SB",
+  "CS",
+  "BB",
+  "SO",
+  "BA",
+  "OBP",
+  "SLG",
+  "OPS",
+  "OPS+",
+  "TB",
+  "GDP",
+  "HBP",
+  "SH",
+  "SF",
+  "IBB",
+  "Pos",
+  "Awards"
+];
+
 function getPlayerURL(playerId) {
-  return `https://www.retrosheet.org/boxesetc/${playerId[0].toUpperCase()}/P${playerId}.htm`;
+  return `https://www.baseball-reference.com/players/${
+    playerId[0]
+  }/${playerId}.shtml`;
 }
 
-function mapBattingStatsToJson(stats) {
-  var startIndex =
-    stats.indexOf("Splits") == -1
-      ? stats.indexOf("Total")
-      : stats.indexOf("Splits");
-
-  console.log(startIndex);
-  stats = stats.slice(startIndex + 1, 28);
-  console.log(stats);
-  return {
-    G: stats[0],
-    AB: stats[1],
-    R: stats[2],
-    H: stats[3],
-    "2B": stats[4],
-    "3B": stats[5],
-    HR: stats[6],
-    RBI: stats[7],
-    BB: stats[8],
-    IBB: stats[9],
-    SO: stats[10],
-    HBP: stats[11],
-    SH: stats[12],
-    SF: stats[13],
-    XI: stats[14],
-    ROE: stats[15],
-    GDP: stats[16],
-    SB: stats[17],
-    CS: stats[18],
-    AVG: stats[19],
-    OBP: stats[20],
-    SLG: stats[21],
-    BFW: stats[22]
-  };
-}
-
-function mapFieldingStatsToJson(stats) {
-  var startIndex = -1;
-  for (var i = 0; i < stats.length; i++) {
-    if (positions.includes(stats[i])) {
-      startIndex = i;
-    }
-  }
-
-  var position = stats[startIndex];
-  stats = stats.slice(startIndex + 1, 15);
-
+function mapStandardBattingStats(stats) {
   var obj = {};
-  obj[position] = {
-    G: stats[0],
-    GS: stats[1],
-    CG: stats[2],
-    INN: stats[3],
-    PO: stats[4],
-    A: stats[5],
-    ERR: stats[6],
-    DP: stats[7],
-    TP: stats[8],
-    AVG: stats[9]
-  };
-
+  for (var i = 0; i < stats.length; i++) {
+    obj[StandardBatting[i]] = $(stats[i]).text();
+  }
   return obj;
-}
-
-function getSectionStatsByContains(searchkey, html) {
-  var element = $(`pre:contains('${searchkey}')`, html)[0];
-  return $(element)
-    .text()
-    .split("\n")
-    .map(element =>
-      element
-        .trim()
-        .split(" ")
-        .filter(value => value != "")
-    );
 }
