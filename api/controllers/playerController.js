@@ -152,71 +152,73 @@ const getPlayerYearlyFieldingStats = (req, res, next) => {
 const getPlayerIds = (req, res, next) => {
   rp(
     `https://www.baseball-reference.com/search/search.fcgi?search=${req.params.searchkey.toLowerCase()}`
-  ).then(function(html) {
-    var players = {};
+  )
+    .then(function(html) {
+      var players = {};
 
-    $(".search-results #players .search-item", html).each((_, element) => {
-      var id = $(element)
-        .find(".search-item-url")
-        .text()
-        .trim()
-        .split("/")
-        .pop()
-        .replace(".shtml", "");
-
-      var nameText = $(element)
-        .find(".search-item-name")
-        .text();
-
-      var teamsText = $(element)
-        .find(".search-item-team")
-        .text()
-        .trim();
-
-      var altsText = $(element)
-        .find(".search-item-alt-names")
-        .text()
-        .trim();
-
-      console.log(nameText.indexOf("(") + " " + nameText.indexOf(")"));
-
-      players[id] = {
-        ID: id,
-        Name: nameText.substr(0, nameText.indexOf("(")).trim(),
-        URL: $(element)
+      $(".search-results #players .search-item", html).each((_, element) => {
+        var id = $(element)
           .find(".search-item-url")
           .text()
-          .trim(),
-        Years: nameText
-          .substring(nameText.indexOf("("), nameText.indexOf(")") + 1)
-          .trim(),
-        Current: teamsText.includes("Current"),
-        AS: nameText.includes("All-Star"),
-        Alts: {
-          Given: altsText
-            .substring(
-              altsText.indexOf("given") + 6,
-              altsText.includes("nickname")
-                ? altsText.indexOf(",")
-                : altsText.length - 1
-            )
-            .trim(),
-          Nicknames: altsText.includes("nickname")
-            ? altsText
-                .substring(altsText.indexOf("nickname") + 9)
-                .trim()
-                .split(",")
-            : []
-        },
-        Teams: teamsText
-          .substring(teamsText.indexOf(":") + 1)
           .trim()
-          .split(",")
-      };
-    });
+          .split("/")
+          .pop()
+          .replace(".shtml", "");
 
-    res.send(players);
-  });
+        var nameText = $(element)
+          .find(".search-item-name")
+          .text();
+
+        var teamsText = $(element)
+          .find(".search-item-team")
+          .text()
+          .trim();
+
+        var altsText = $(element)
+          .find(".search-item-alt-names")
+          .text()
+          .trim();
+
+        players[id] = {
+          ID: id,
+          Name: nameText.substr(0, nameText.indexOf("(")).trim(),
+          URL: $(element)
+            .find(".search-item-url")
+            .text()
+            .trim(),
+          Years: nameText
+            .substring(nameText.indexOf("("), nameText.indexOf(")") + 1)
+            .trim(),
+          Current: teamsText.includes("Current"),
+          AS: nameText.includes("All-Star"),
+          Alts: {
+            Given: altsText
+              .substring(
+                altsText.indexOf("given") + 6,
+                altsText.includes("nickname")
+                  ? altsText.indexOf(",")
+                  : altsText.length - 1
+              )
+              .trim(),
+            Nicknames: altsText.includes("nickname")
+              ? altsText
+                  .substring(altsText.indexOf("nickname") + 9)
+                  .trim()
+                  .split(",")
+              : []
+          },
+          Teams: teamsText
+            .substring(teamsText.indexOf(":") + 1)
+            .trim()
+            .split(",")
+        };
+      });
+
+      res.send(players);
+    })
+    .catch(err => {
+      next(new httpErrors.NotFound(`No players found`));
+    });
 };
 
 module.exports = {

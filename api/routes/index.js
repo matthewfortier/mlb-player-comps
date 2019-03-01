@@ -1,10 +1,7 @@
+const httpErrors = require("httperrors");
 const controllers = require("../controllers");
 
 module.exports = app => {
-  app.get("/", (req, res) => {
-    return res.send("MLB Player Comparisons");
-  });
-
   app.get("/player/search/:searchkey", controllers.playerCtrl.getPlayerIds);
 
   app.get(
@@ -27,9 +24,7 @@ module.exports = app => {
     controllers.playerCtrl.getPlayerYearlyFieldingStats
   );
 
-  app.use((req, res) => {
-    res
-      .status(404)
-      .send({ url: `sorry friend, but url ${req.originalUrl} is not found` });
+  app.use((req, res, next) => {
+    next(new httpErrors.NotFound(`Page Not Found`));
   });
 };
