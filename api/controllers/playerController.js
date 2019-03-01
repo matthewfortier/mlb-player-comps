@@ -1,56 +1,97 @@
 const rp = require("request-promise");
 const $ = require("cheerio");
+const httpErrors = require("httperrors");
 
 const svc = require("../services");
 
 const getPlayerCareerBattingStats = (req, res, next) => {
   var playerURL = svc.getPlayerURL(req.params.playerId);
-  console.log(playerURL);
-  // Get HTML from Retrosheet
-  rp(playerURL).then(function(html) {
-    // Get the career batting record
-    var careerStats = {};
-    $("#batting_standard tfoot tr:nth-child(1)", html)
-      .children()
-      .each((index, element) => {
-        careerStats[svc.CareerBatting[index]] = $(element)
-          .text()
-          .includes(",")
-          ? $(element)
-              .text()
-              .split(",")
-          : $(element).text();
-      });
 
-    res.send(careerStats);
-  });
+  // Get HTML from Baseball Reference
+  rp(playerURL)
+    .then(function(html) {
+      var careerStats = {};
+
+      // Get the stats labels and remove first three for career stats
+      var labels = $("#batting_standard thead tr", html)
+        .children()
+        .splice(3)
+        .map(label => $(label).text());
+
+      // Change the first label from Lg to Yrs because of career stats
+      labels[0] = "Yrs";
+
+      $("#batting_standard tfoot tr:not(.spacer)", html).each(
+        (index, element) => {
+          var id = $($(element).children()[0]).text();
+          careerStats[id] = svc.mapStandardBattingStats(
+            $(element).children(),
+            labels
+          );
+        }
+      );
+
+      if (Object.keys(careerStats).length > 0) {
+        return res.send(careerStats);
+      } else {
+        next(
+          new httpErrors.NotFound(
+            `The player's (${
+              req.params.playerId
+            }) career batting stats were not found`
+          )
+        );
+      }
+    })
+    .catch(err => {
+      next(
+        new httpErrors.NotFound(
+          `The player (${req.params.playerId}) was not found`
+        )
+      );
+    });
 };
 
 const getPlayerYearlyBattingStats = (req, res, next) => {
   var playerURL = svc.getPlayerURL(req.params.playerId);
-  console.log(playerURL);
   // Get HTML from Retrosheet
-  rp(playerURL).then(function(html) {
-    // Get the career batting record
-    var yearStats = {};
-    $(
-      `#batting_standard tbody tr th:contains('${req.params.year}')`,
-      html
-    ).each((_, element) => {
-      var tr = $(element).parent();
+  rp(playerURL)
+    .then(function(html) {
+      // Get the career batting record
+      var yearStats = {};
+      $(
+        `#batting_standard tbody tr th:contains('${req.params.year}')`,
+        html
+      ).each((_, element) => {
+        var tr = $(element).parent();
 
-      console.log($(element).text());
-      yearStats[$(tr.children()[2]).text()] = svc.mapStandardBattingStats(
-        tr.children()
+        yearStats[$(tr.children()[2]).text()] = svc.mapStandardBattingStats(
+          tr.children(),
+          $("#batting_standard thead tr", html)
+            .children()
+            .map((_, element) => $(element).text())
+        );
+      });
+
+      if (Object.keys(yearStats).length > 0) {
+        return res.send(yearStats);
+      } else {
+        next(
+          new httpErrors.NotFound(
+            `The player's (${req.params.playerId}) batting stats for ${
+              req.params.year
+            } was not found`
+          )
+        );
+      }
+    })
+    .catch(err => {
+      next(
+        new httpErrors.NotFound(
+          `The player (${req.params.playerId}) was not found`
+        )
       );
     });
-
-    if (Object.keys(yearStats).length > 0) {
-      return res.send(yearStats);
-    } else {
-      return res.send("No records for this year");
-    }
-  });
 };
 
 const getPlayerCareerFieldingStats = (req, res, next) => {
