@@ -21,15 +21,16 @@ const getPlayerCareerBattingStats = (req, res, next) => {
       // Change the first label from Lg to Yrs because of career stats
       labels[0] = "Yrs";
 
-      $("#batting_standard tfoot tr:not(.spacer)", html).each(
-        (index, element) => {
-          var id = $($(element).children()[0]).text();
-          careerStats[id] = svc.mapStandardBattingStats(
-            $(element).children(),
-            labels
-          );
-        }
-      );
+      $("#batting_standard tfoot tr:not(.spacer)", html).each((_, element) => {
+        var id = $(element)
+          .children()
+          .eq(0)
+          .text();
+        careerStats[id] = svc.mapStandardBattingStats(
+          $(element).children(),
+          labels
+        );
+      });
 
       if (Object.keys(careerStats).length > 0) {
         return res.send(careerStats);
@@ -65,7 +66,12 @@ const getPlayerYearlyBattingStats = (req, res, next) => {
       ).each((_, element) => {
         var tr = $(element).parent();
 
-        yearStats[$(tr.children()[2]).text()] = svc.mapStandardBattingStats(
+        yearStats[
+          tr
+            .children()
+            .eq(2)
+            .text()
+        ] = svc.mapStandardBattingStats(
           tr.children(),
           $("#batting_standard thead tr", html)
             .children()
@@ -85,7 +91,7 @@ const getPlayerYearlyBattingStats = (req, res, next) => {
         );
       }
     })
-    .catch(err => {
+    .catch(_ => {
       next(
         new httpErrors.NotFound(
           `The player (${req.params.playerId}) was not found`
